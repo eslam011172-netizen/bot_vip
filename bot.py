@@ -3,7 +3,7 @@ import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-TOKEN = os.getenv("BOT_TOKEN5644960695:AAGx5jysi7ZYFFQw14LNIlcS2bpRCXWAg6g")
+TOKEN = os.getenv("BOT_TOKEN=5644960695:AAGx5jysi7ZYFFQw14LNIlcS2bpRCXWAg6g")
 
 CHANNELS = ["@Muslim_vip1"]
 ADMIN_ID = 5083996619

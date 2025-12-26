@@ -1,7 +1,7 @@
 import os
 import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
 
 TOKEN = os.getenv("BOT_TOKEN=5644960695:AAGx5jysi7ZYFFQw14LNIlcS2bpRCXWAg6g")
 
@@ -10,7 +10,6 @@ ADMIN_ID = 5083996619
 DATA_FILE = "data.json"
 
 
-# تحميل البيانات
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
         data = json.load(f)
@@ -73,9 +72,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if await is_subscribed(context.bot, query.from_user.id):
+        await query.edit_message_text("✅ تم التحقق بنجاح\nاكتب /start")
+    else:
+        await query.answer("❌ لسه مش مشترك", show_alert=True)
+
+
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(check, pattern="check"))
     print("Bot is running...")
     await app.run_polling()
 

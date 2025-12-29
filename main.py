@@ -4,7 +4,7 @@ import time
 import os
 
 # ================== الإعدادات ==================
-TOKEN = "PUT_YOUR_BOT_TOKEN"
+TOKEN = "5644960695:AAGx5jysi7ZYFFQw14LNIlcS2bpRCXWAg6g"
 BOT_USERNAME = "@VersatileVIP_bot"
 CHANNEL = "@Muslim_vip1"
 ADMIN_ID = 5083996619  # حط ايديك هنا

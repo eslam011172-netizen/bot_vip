@@ -1,37 +1,25 @@
 import json
-import os
+import threading
 
-DATA_FILE = "data/users.json"
-
+LOCK = threading.Lock()
+FILE = "data/users.json"
 
 def load_users():
-    if not os.path.exists(DATA_FILE):
-        return {}
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
+    with open(FILE, "r") as f:
         return json.load(f)
 
+def save_users(data):
+    with LOCK:
+        with open(FILE, "w") as f:
+            json.dump(data, f, indent=2)
 
-def save_users(users):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
+def add_user(user_id):
+    data = load_users()
+    uid = str(user_id)
 
-
-def get_user(user_id):
-    users = load_users()
-    return users.get(str(user_id))
-
-
-def add_user(user_id, username=None):
-    users = load_users()
-    users[str(user_id)] = {
-        "balance": 0,
-        "username": username,
-        "invites": 0
-    }
-    save_users(users)
-
-
-def add_balance(user_id, amount):
-    users = load_users()
-    users[str(user_id)]["balance"] += amount
-    save_users(users)
+    if uid not in data:
+        data[uid] = {
+            "points": 0,
+            "invites": 0
+        }
+        save_users(data)

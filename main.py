@@ -1,178 +1,145 @@
 import telebot
 from telebot import types
-import json
-import os
+import json, os
 
-# ================== الإعدادات ==================
-TOKEN = "5644960695:AAGx5jysi7ZYFFQw14LNIlcS2bpRCXWAg6g"
+# ================== CONFIG ==================
+TOKEN = "PUT_YOUR_TOKEN"
 FORCE_CHANNEL = "@Muslim_vip1"
 ADMIN_ID = 5083996619
-
-bot = telebot.TeleBot(TOKEN)
-
 DATA_FILE = "users.json"
 
-# ================== تحميل / حفظ البيانات ==================
-def load_data():
+bot = telebot.TeleBot(TOKEN, threaded=True)
+
+# ================== DATABASE ==================
+def load():
     if not os.path.exists(DATA_FILE):
         return {}
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def save_data(data):
+def save(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-users = load_data()
+db = load()
 
-def get_user(uid):
+def user(uid):
     uid = str(uid)
-    if uid not in users:
-        users[uid] = {
+    if uid not in db:
+        db[uid] = {
             "points": 0,
-            "invites": 0
+            "invites": 0,
+            "vip": False
         }
-        save_data(users)
-    return users[uid]
+        save(db)
+    return db[uid]
 
-# ================== فحص الاشتراك ==================
-def is_subscribed(user_id):
+# ================== FORCE SUB ==================
+def subscribed(uid):
     try:
-        m = bot.get_chat_member(FORCE_CHANNEL, user_id)
+        m = bot.get_chat_member(FORCE_CHANNEL, uid)
         return m.status in ["member", "administrator", "creator"]
     except:
         return False
 
-def force_sub_markup():
-    markup = types.InlineKeyboardMarkup()
-    markup.add(
-        types.InlineKeyboardButton(
-            "📢 اشترك في القناة",
-            url=f"https://t.me/{FORCE_CHANNEL.replace('@','')}"
-        )
-    )
-    markup.add(types.InlineKeyboardButton("✅ تحقق", callback_data="check_sub"))
-    return markup
+def sub_markup():
+    m = types.InlineKeyboardMarkup()
+    m.add(types.InlineKeyboardButton("📢 اشترك", url=f"https://t.me/{FORCE_CHANNEL.replace('@','')}"))
+    m.add(types.InlineKeyboardButton("✅ تحقق", callback_data="check"))
+    return m
 
-# ================== القوائم ==================
+# ================== MENUS ==================
 def main_menu():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.row("💰 رصيدي", "👥 دعوة أصدقاء")
-    markup.row("🛒 المتجر", "🔋 شحن نقاط")
-    return markup
+    m = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    m.row("💰 رصيدي", "👥 دعوة")
+    m.row("🛒 المتجر", "💎 VIP")
+    m.row("🎯 عروض CPA")
+    return m
 
 def shop_menu():
-    markup = types.InlineKeyboardMarkup()
-    markup.add(
-        types.InlineKeyboardButton("🎯 ملف Headshot", callback_data="buy_headshot")
-    )
-    return markup
+    m = types.InlineKeyboardMarkup()
+    m.add(types.InlineKeyboardButton("🎯 ملف Headshot (50)", callback_data="buy_headshot"))
+    return m
 
-# ================== /start ==================
+# ================== START ==================
 @bot.message_handler(commands=["start"])
-def start(message):
-    uid = message.from_user.id
+def start(msg):
+    uid = msg.from_user.id
 
-    if not is_subscribed(uid):
-        bot.send_message(
-            message.chat.id,
-            "🚫 اشترك في القناة أولاً",
-            reply_markup=force_sub_markup()
-        )
+    if not subscribed(uid):
+        bot.send_message(msg.chat.id, "🚫 اشترك أولاً", reply_markup=sub_markup())
         return
 
-    get_user(uid)
+    user(uid)
 
-    bot.send_message(
-        message.chat.id,
-        "👋 أهلاً بيك\nاختر من القائمة 👇",
-        reply_markup=main_menu()
-    )
+    # referral
+    if len(msg.text.split()) > 1:
+        ref = msg.text.split()[1]
+        if ref != str(uid) and "ref" not in db[str(uid)]:
+            db[str(uid)]["ref"] = True
+            db[ref]["points"] += 5
+            db[ref]["invites"] += 1
+            save(db)
 
-# ================== تحقق الاشتراك ==================
-@bot.callback_query_handler(func=lambda c: c.data == "check_sub")
-def check_sub(call):
-    if is_subscribed(call.from_user.id):
-        bot.answer_callback_query(call.id, "✅ تم")
-        bot.send_message(call.message.chat.id, "✔️ اكتب /start")
+    bot.send_message(msg.chat.id, "👋 أهلاً بك", reply_markup=main_menu())
+
+# ================== CHECK ==================
+@bot.callback_query_handler(func=lambda c: c.data == "check")
+def check(c):
+    if subscribed(c.from_user.id):
+        bot.answer_callback_query(c.id, "✅ تم")
+        bot.send_message(c.message.chat.id, "اكتب /start")
     else:
-        bot.answer_callback_query(call.id, "❌ لسه", show_alert=True)
+        bot.answer_callback_query(c.id, "❌ لسه", show_alert=True)
 
-# ================== الرصيد ==================
+# ================== BALANCE ==================
 @bot.message_handler(func=lambda m: m.text == "💰 رصيدي")
-def balance(message):
-    user = get_user(message.from_user.id)
-    bot.send_message(
-        message.chat.id,
-        f"💰 نقاطك: {user['points']}\n👥 دعواتك: {user['invites']}"
-    )
+def bal(msg):
+    u = user(msg.from_user.id)
+    bot.send_message(msg.chat.id, f"💰 نقاطك: {u['points']}\n👥 دعواتك: {u['invites']}")
 
-# ================== دعوة ==================
-@bot.message_handler(func=lambda m: m.text == "👥 دعوة أصدقاء")
-def invite(message):
-    uid = message.from_user.id
-    bot.send_message(
-        message.chat.id,
-        f"👥 رابطك:\nhttps://t.me/{bot.get_me().username}?start={uid}\n\n+5 نقاط لكل صديق"
-    )
+# ================== INVITE ==================
+@bot.message_handler(func=lambda m: m.text == "👥 دعوة")
+def invite(msg):
+    bot.send_message(msg.chat.id,
+        f"https://t.me/{bot.get_me().username}?start={msg.from_user.id}\n+5 نقاط")
 
-# ================== المتجر ==================
+# ================== SHOP ==================
 @bot.message_handler(func=lambda m: m.text == "🛒 المتجر")
-def shop(message):
-    bot.send_message(
-        message.chat.id,
-        "🛒 متجر النقاط\nاختر المنتج 👇",
-        reply_markup=shop_menu()
-    )
+def shop(msg):
+    bot.send_message(msg.chat.id, "🛒 اختر المنتج", reply_markup=shop_menu())
 
-# ================== شراء Headshot ==================
 @bot.callback_query_handler(func=lambda c: c.data == "buy_headshot")
-def buy_headshot(call):
-    uid = str(call.from_user.id)
-    user = get_user(uid)
-    price = 50
-
-    if user["points"] < price:
-        bot.answer_callback_query(call.id, "❌ نقاطك غير كافية", show_alert=True)
+def buy(c):
+    u = user(c.from_user.id)
+    if u["points"] < 50:
+        bot.answer_callback_query(c.id, "❌ نقاطك غير كافية", show_alert=True)
         return
+    u["points"] -= 50
+    save(db)
+    bot.send_message(c.message.chat.id,
+        "✅ تم الشراء\n📦 الرابط:\nhttps://example.com/headshot.zip")
 
-    # خصم النقاط
-    user["points"] -= price
-    save_data(users)
+# ================== VIP ==================
+@bot.message_handler(func=lambda m: m.text == "💎 VIP")
+def vip(msg):
+    m = types.InlineKeyboardMarkup()
+    m.add(types.InlineKeyboardButton("💳 اشترك VIP", url="https://t.me/YourAdmin"))
+    bot.send_message(msg.chat.id, "💎 مزايا VIP", reply_markup=m)
 
-    # تسليم تلقائي (رابط / ملف)
-    bot.send_message(
-        call.message.chat.id,
-        "✅ تم الشراء بنجاح 🎉\n\n📦 رابط الملف:\nhttps://example.com/headshot.zip"
-    )
+# ================== CPA ==================
+@bot.message_handler(func=lambda m: m.text == "🎯 عروض CPA")
+def cpa(msg):
+    bot.send_message(msg.chat.id,
+        "🎯 نفّذ العرض واربح نقاط:\nhttps://cpa-offer-link.com")
 
-# ================== شحن نقاط ==================
-@bot.message_handler(func=lambda m: m.text == "🔋 شحن نقاط")
-def charge(message):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(
-        types.InlineKeyboardButton("💳 تواصل مع الأدمن", url="https://t.me/YourAdmin")
-    )
-    bot.send_message(
-        message.chat.id,
-        "🔋 لشحن النقاط تواصل مع الأدمن 👇",
-        reply_markup=markup
-    )
+# ================== ADMIN ==================
+@bot.message_handler(commands=["admin"])
+def admin(msg):
+    if msg.from_user.id != ADMIN_ID:
+        return
+    bot.send_message(msg.chat.id, "👑 لوحة الأدمن\n/users.json")
 
-# ================== إحالات ==================
-@bot.message_handler(func=lambda m: m.text.startswith("/start "))
-def referral(message):
-    uid = str(message.from_user.id)
-    ref = message.text.split()[-1]
-
-    if ref != uid:
-        user = get_user(uid)
-        if "referred" not in user:
-            user["referred"] = True
-            users[ref]["points"] += 5
-            users[ref]["invites"] += 1
-            save_data(users)
-
-# ================== تشغيل ==================
-print("Bot is running...")
+# ================== RUN ==================
+print("Bot Running...")
 bot.infinity_polling(skip_pending=True)

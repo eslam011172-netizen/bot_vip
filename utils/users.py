@@ -1,6 +1,5 @@
 import json
 import os
-from datetime import datetime
 
 DATA_FILE = "data/users.json"
 
@@ -19,36 +18,20 @@ def save_users(users):
 
 def get_user(user_id):
     users = load_users()
-    uid = str(user_id)
-
-    if uid not in users:
-        users[uid] = {
-            "points": 0,
-            "invites": 0,
-            "joined": datetime.utcnow().isoformat()
-        }
-        save_users(users)
-
-    return users[uid]
+    return users.get(str(user_id))
 
 
-def add_points(user_id, amount):
+def add_user(user_id, username=None):
     users = load_users()
-    uid = str(user_id)
-    users.setdefault(uid, {
-        "points": 0,
+    users[str(user_id)] = {
+        "balance": 0,
+        "username": username,
         "invites": 0
-    })
-    users[uid]["points"] += amount
+    }
     save_users(users)
 
 
-def add_invite(user_id):
+def add_balance(user_id, amount):
     users = load_users()
-    uid = str(user_id)
-    users.setdefault(uid, {
-        "points": 0,
-        "invites": 0
-    })
-    users[uid]["invites"] += 1
+    users[str(user_id)]["balance"] += amount
     save_users(users)

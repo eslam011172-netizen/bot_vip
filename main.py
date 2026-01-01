@@ -1,46 +1,35 @@
 import telebot
 from telebot import types
-import threading
 import json
+import time
 import os
 
-# ================== الإعدادات ==================
+# ========= الإعدادات =========
 TOKEN = "5644960695:AAGx5jysi7ZYFFQw14LNIlcS2bpRCXWAg6g"
 FORCE_CHANNEL = "@Muslim_vip1"
-ADMINS = [5083996619]  # حط ID الأدمن
+ADMINS = [5083996619]  # ايدي الأدمن
 DATA_FILE = "users.json"
 
 bot = telebot.TeleBot(TOKEN, threaded=True)
 
-# ================== إدارة البيانات ==================
-if not os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "w") as f:
-        json.dump({}, f)
-
+# ========= تحميل / حفظ البيانات =========
 def load_users():
-    with open(DATA_FILE, "r") as f:
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 def save_users(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
-def get_user(user_id):
-    users = load_users()
-    if str(user_id) not in users:
-        users[str(user_id)] = {"points": 0}
-        save_users(users)
-    return users[str(user_id)]
+users = load_users()
+last_action = {}
 
-def update_points(user_id, amount):
-    users = load_users()
-    uid = str(user_id)
-    if uid not in users:
-        users[uid] = {"points": 0}
-    users[uid]["points"] += amount
-    save_users(users)
+# ========= أدوات =========
+def is_admin(uid):
+    return uid in ADMINS
 
-# ================== فحص الاشتراك ==================
 def is_subscribed(user_id):
     try:
         member = bot.get_chat_member(FORCE_CHANNEL, user_id)
@@ -48,137 +37,145 @@ def is_subscribed(user_id):
     except:
         return False
 
-def force_sub_markup():
-    markup = types.InlineKeyboardMarkup()
-    markup.add(
-        types.InlineKeyboardButton(
-            "📢 اشترك في القناة",
-            url=f"https://t.me/{FORCE_CHANNEL.replace('@','')}"
-        )
-    )
-    markup.add(types.InlineKeyboardButton("✅ تحقق", callback_data="check_sub"))
-    return markup
+def anti_spam(uid, sec=2):
+    now = time.time()
+    if uid in last_action and now - last_action[uid] < sec:
+        return False
+    last_action[uid] = now
+    return True
 
-# ================== القوائم ==================
+def get_user(uid):
+    uid = str(uid)
+    if uid not in users:
+        users[uid] = {"points": 0, "invites": 0}
+        save_users(users)
+    return users[uid]
+
+# ========= القوائم =========
 def main_menu():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.row("💰 رصيدي", "👥 دعوة أصدقاء")
-    markup.row("🎁 المكافآت")
-    return markup
+    m = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    m.row("💰 رصيدي", "👥 دعوة أصدقاء")
+    m.row("🎁 المكافآت")
+    return m
 
 def admin_menu():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.row("➕ إضافة نقاط", "➖ خصم نقاط")
-    markup.row("📢 رسالة جماعية", "📊 إحصائيات")
-    markup.row("⬅️ رجوع")
-    return markup
+    m = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    m.row("➕ إضافة نقاط", "➖ خصم نقاط")
+    m.row("📊 إحصائيات", "📢 إذاعة")
+    m.row("⬅️ خروج")
+    return m
 
-# ================== /start ==================
+# ========= /start =========
 @bot.message_handler(commands=["start"])
 def start(message):
-    user_id = message.from_user.id
+    uid = message.from_user.id
 
-    if not is_subscribed(user_id):
-        bot.send_message(
-            message.chat.id,
-            "🚫 لازم تشترك في القناة الأول",
-            reply_markup=force_sub_markup()
-        )
+    if not anti_spam(uid):
         return
 
-    get_user(user_id)
+    if not is_subscribed(uid):
+        markup = types.InlineKeyboardMarkup()
+        markup.add(
+            types.InlineKeyboardButton(
+                "📢 اشترك في القناة",
+                url=f"https://t.me/{FORCE_CHANNEL.replace('@','')}"
+            )
+        )
+        markup.add(types.InlineKeyboardButton("✅ تحقق", callback_data="check_sub"))
+        bot.send_message(message.chat.id, "🚫 لازم تشترك في القناة الأول", reply_markup=markup)
+        return
 
-    bot.send_message(
-        message.chat.id,
-        "👋 أهلاً بيك في Versatile VIP Bot\n\nاختر من القائمة 👇",
-        reply_markup=main_menu()
-    )
+    get_user(uid)
 
-# ================== تحقق الاشتراك ==================
-@bot.callback_query_handler(func=lambda call: call.data == "check_sub")
+    if is_admin(uid):
+        bot.send_message(message.chat.id, "👑 لوحة الأدمن", reply_markup=admin_menu())
+    else:
+        bot.send_message(message.chat.id, "👋 أهلاً بيك", reply_markup=main_menu())
+
+# ========= تحقق الاشتراك =========
+@bot.callback_query_handler(func=lambda c: c.data == "check_sub")
 def check_sub(call):
     if is_subscribed(call.from_user.id):
         bot.answer_callback_query(call.id, "✅ تم الاشتراك")
-        bot.send_message(call.message.chat.id, "✔️ تم التحقق\nاكتب /start")
+        bot.send_message(call.message.chat.id, "اكتب /start")
     else:
-        bot.answer_callback_query(call.id, "❌ لسه مش مشترك", show_alert=True)
+        bot.answer_callback_query(call.id, "❌ اشترك ثم حاول", show_alert=True)
 
-# ================== المستخدم ==================
+# ========= المستخدم =========
 @bot.message_handler(func=lambda m: m.text == "💰 رصيدي")
 def balance(message):
-    user = get_user(message.from_user.id)
-    bot.send_message(message.chat.id, f"💰 رصيدك: {user['points']} نقطة")
+    u = get_user(message.from_user.id)
+    bot.send_message(message.chat.id, f"💰 رصيدك: {u['points']} نقطة")
 
 @bot.message_handler(func=lambda m: m.text == "👥 دعوة أصدقاء")
 def invite(message):
+    uid = message.from_user.id
     bot.send_message(
         message.chat.id,
-        f"👥 رابطك:\nhttps://t.me/{bot.get_me().username}?start={message.from_user.id}"
+        f"👥 رابطك:\nhttps://t.me/{bot.get_me().username}?start={uid}\n+5 نقاط لكل دعوة"
     )
 
 @bot.message_handler(func=lambda m: m.text == "🎁 المكافآت")
 def rewards(message):
     bot.send_message(
         message.chat.id,
-        "🎁 المكافآت:\n\n50 نقطة = جائزة 🎉\n100 نقطة = VIP ⭐"
+        "🎁 المكافآت:\n\n50 نقطة = ملف 🔥\n100 نقطة = VIP ⭐"
     )
 
-# ================== الأدمن ==================
-@bot.message_handler(commands=["admin"])
-def admin(message):
-    if message.from_user.id in ADMINS:
-        bot.send_message(
-            message.chat.id,
-            "👑 لوحة تحكم الأدمن",
-            reply_markup=admin_menu()
-        )
+# ========= لوحة الأدمن =========
+@bot.message_handler(func=lambda m: m.text == "➕ إضافة نقاط" and is_admin(m.from_user.id))
+def add_points(message):
+    msg = bot.send_message(message.chat.id, "ارسل: ايدي عدد")
+    bot.register_next_step_handler(msg, process_add)
 
-# إضافة نقاط
-@bot.message_handler(func=lambda m: m.text == "➕ إضافة نقاط" and m.from_user.id in ADMINS)
-def add_points_step1(message):
-    msg = bot.send_message(message.chat.id, "✍️ أرسل: ID عدد_النقاط")
-    bot.register_next_step_handler(msg, add_points_step2)
-
-def add_points_step2(message):
+def process_add(message):
     try:
         uid, amount = message.text.split()
-        update_points(uid, int(amount))
-        bot.send_message(message.chat.id, "✅ تم إضافة النقاط")
+        user = get_user(uid)
+        user["points"] += int(amount)
+        save_users(users)
+        bot.send_message(message.chat.id, "✅ تم الإضافة")
     except:
-        bot.send_message(message.chat.id, "❌ صيغة خاطئة")
+        bot.send_message(message.chat.id, "❌ صيغة خطأ")
 
-# خصم نقاط
-@bot.message_handler(func=lambda m: m.text == "➖ خصم نقاط" and m.from_user.id in ADMINS)
-def remove_points_step1(message):
-    msg = bot.send_message(message.chat.id, "✍️ أرسل: ID عدد_النقاط")
-    bot.register_next_step_handler(msg, remove_points_step2)
+@bot.message_handler(func=lambda m: m.text == "➖ خصم نقاط" and is_admin(m.from_user.id))
+def remove_points(message):
+    msg = bot.send_message(message.chat.id, "ارسل: ايدي عدد")
+    bot.register_next_step_handler(msg, process_remove)
 
-def remove_points_step2(message):
+def process_remove(message):
     try:
         uid, amount = message.text.split()
-        update_points(uid, -int(amount))
-        bot.send_message(message.chat.id, "✅ تم خصم النقاط")
+        user = get_user(uid)
+        user["points"] = max(0, user["points"] - int(amount))
+        save_users(users)
+        bot.send_message(message.chat.id, "✅ تم الخصم")
     except:
-        bot.send_message(message.chat.id, "❌ صيغة خاطئة")
+        bot.send_message(message.chat.id, "❌ صيغة خطأ")
 
-# إحصائيات
-@bot.message_handler(func=lambda m: m.text == "📊 إحصائيات" and m.from_user.id in ADMINS)
+@bot.message_handler(func=lambda m: m.text == "📊 إحصائيات" and is_admin(m.from_user.id))
 def stats(message):
-    users = load_users()
-    bot.send_message(
-        message.chat.id,
-        f"📊 الإحصائيات:\n👥 عدد المستخدمين: {len(users)}"
-    )
+    bot.send_message(message.chat.id, f"👥 عدد المستخدمين: {len(users)}")
 
-# رجوع
-@bot.message_handler(func=lambda m: m.text == "⬅️ رجوع")
-def back(message):
-    bot.send_message(message.chat.id, "⬅️ رجوع", reply_markup=main_menu())
+@bot.message_handler(func=lambda m: m.text == "📢 إذاعة" and is_admin(m.from_user.id))
+def broadcast(message):
+    msg = bot.send_message(message.chat.id, "اكتب الرسالة")
+    bot.register_next_step_handler(msg, process_broadcast)
 
-# ================== تشغيل سريع ==================
-def run_bot():
-    bot.infinity_polling(skip_pending=True, none_stop=True, timeout=20)
+def process_broadcast(message):
+    sent = 0
+    for uid in users:
+        try:
+            bot.send_message(uid, message.text)
+            sent += 1
+        except:
+            pass
+    bot.send_message(message.chat.id, f"✅ تم الإرسال لـ {sent}")
 
-threading.Thread(target=run_bot).start()
+@bot.message_handler(func=lambda m: m.text == "⬅️ خروج")
+def exit_admin(message):
+    bot.send_message(message.chat.id, "تم الخروج", reply_markup=main_menu())
 
-print("🚀 Bot is running fast & stable")
+# ========= تشغيل =========
+print("Bot is running...")
+bot.infinity_polling(skip_pending=True, none_stop=True, timeout=20)

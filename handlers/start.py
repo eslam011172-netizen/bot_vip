@@ -1,4 +1,4 @@
-Enterfrom telebot import types
+from telebot import types
 from utils.users import add_user
 
 def start_handler(bot, message):

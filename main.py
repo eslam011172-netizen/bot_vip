@@ -18,7 +18,6 @@ def load():
         return {
             "users": {},
             "products": {},
-            "vip": [],
             "coupons": {},
             "logs": [],
             "stats": {"users":0,"sales":0}
@@ -44,8 +43,7 @@ def get_user(uid):
         data["users"][uid]={
             "points":0,
             "vip":False,
-            "ref":False,
-            "last":0
+            "ref":False
         }
         data["stats"]["users"]+=1
         save()
@@ -53,7 +51,7 @@ def get_user(uid):
 
 def log(uid,action):
     data["logs"].append({
-        "user":uid,
+        "user":str(uid),
         "action":action,
         "time":int(time.time())
     })
@@ -63,15 +61,16 @@ def log(uid,action):
 def main_menu():
     kb=types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row("💰 رصيدي","🛒 المتجر")
-    kb.row("🎯 CPA","🎟 كوبون")
-    kb.row("⭐ VIP","👥 دعوة")
+    kb.row("🎮 شحن PUBG","🔥 ملفات VIP")
+    kb.row("🎯 CPA","👥 دعوة")
+    kb.row("⭐ VIP","🧾 سجلّي")
     return kb
 
 def admin_menu():
     kb=types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton("➕ شحن",callback_data="charge"))
-    kb.add(types.InlineKeyboardButton("📦 منتج",callback_data="product"))
-    kb.add(types.InlineKeyboardButton("📩 بث",callback_data="broadcast"))
+    kb.add(types.InlineKeyboardButton("➕ شحن نقاط",callback_data="charge"))
+    kb.add(types.InlineKeyboardButton("📦 إضافة منتج",callback_data="product"))
+    kb.add(types.InlineKeyboardButton("📩 بث رسالة",callback_data="broadcast"))
     kb.add(types.InlineKeyboardButton("📊 إحصائيات",callback_data="stats"))
     return kb
 
@@ -83,7 +82,7 @@ def start(m):
         kb=types.InlineKeyboardMarkup()
         kb.add(types.InlineKeyboardButton("📢 اشترك",url=f"https://t.me/{FORCE_CHANNEL[1:]}"))
         kb.add(types.InlineKeyboardButton("✅ تحقق",callback_data="check"))
-        bot.send_message(m.chat.id,"اشترك أولاً",reply_markup=kb)
+        bot.send_message(m.chat.id,"🚫 اشترك أولاً",reply_markup=kb)
         return
 
     u=get_user(uid)
@@ -94,9 +93,9 @@ def start(m):
             get_user(ref)["points"]+=10
             u["ref"]=True
             save()
-            bot.send_message(ref,"🎉 كسبت 10 نقاط إحالة")
+            bot.send_message(ref,"🎉 كسبت 10 نقاط دعوة")
 
-    bot.send_message(m.chat.id,"👋 أهلاً",reply_markup=main_menu())
+    bot.send_message(m.chat.id,"👋 أهلاً بيك في البوت",reply_markup=main_menu())
 
     if uid==ADMIN_ID:
         bot.send_message(m.chat.id,"👑 لوحة الأدمن",reply_markup=admin_menu())
@@ -105,44 +104,43 @@ def start(m):
 @bot.message_handler(func=lambda m:m.text=="💰 رصيدي")
 def bal(m):
     u=get_user(m.from_user.id)
-    bot.send_message(m.chat.id,f"💰 {u['points']} نقطة")
+    bot.send_message(m.chat.id,f"💰 رصيدك: {u['points']} نقطة")
 
-# ================== CPA ==================
-@bot.message_handler(func=lambda m:m.text=="🎯 CPA")
-def cpa(m):
-    bot.send_message(m.chat.id,"🎯 كل دعوة = 10 نقاط\n💰 بيع = عمولة")
+# ================== سجل ==================
+@bot.message_handler(func=lambda m:m.text=="🧾 سجلّي")
+def mylog(m):
+    uid=str(m.from_user.id)
+    logs=[l for l in data["logs"] if l["user"]==uid][-5:]
+    if not logs:
+        bot.send_message(m.chat.id,"📭 لا يوجد عمليات")
+        return
+    text="🧾 آخر عملياتك:\n\n"
+    for l in logs:
+        text+=f"• {l['action']}\n"
+    bot.send_message(m.chat.id,text)
 
-# ================== كوبون ==================
-@bot.message_handler(func=lambda m:m.text=="🎟 كوبون")
-def coupon(m):
-    bot.send_message(m.chat.id,"📥 أرسل كود الخصم")
-
-@bot.message_handler(func=lambda m:m.text.startswith("CP-"))
-def use_coupon(m):
-    c=m.text
-    u=get_user(m.from_user.id)
-    if c in data["coupons"]:
-        u["points"]+=data["coupons"][c]
-        del data["coupons"][c]
-        save()
-        bot.send_message(m.chat.id,"✅ تم الخصم")
-    else:
-        bot.send_message(m.chat.id,"❌ غير صالح")
+# ================== دعوة ==================
+@bot.message_handler(func=lambda m:m.text=="👥 دعوة")
+def invite(m):
+    bot.send_message(
+        m.chat.id,
+        f"🔗 رابطك:\nhttps://t.me/{bot.get_me().username}?start={m.from_user.id}\n+10 نقاط"
+    )
 
 # ================== VIP ==================
 @bot.message_handler(func=lambda m:m.text=="⭐ VIP")
 def vip(m):
     u=get_user(m.from_user.id)
     if u["vip"]:
-        bot.send_message(m.chat.id,"⭐ انت VIP")
+        bot.send_message(m.chat.id,"⭐ أنت VIP بالفعل")
     elif u["points"]>=100:
         u["points"]-=100
         u["vip"]=True
-        data["vip"].append(str(m.from_user.id))
         save()
-        bot.send_message(m.chat.id,"🎉 تم التفعيل")
+        log(m.from_user.id,"تفعيل VIP")
+        bot.send_message(m.chat.id,"🎉 تم تفعيل VIP")
     else:
-        bot.send_message(m.chat.id,"❌ 100 نقطة")
+        bot.send_message(m.chat.id,"❌ تحتاج 100 نقطة")
 
 # ================== المتجر ==================
 @bot.message_handler(func=lambda m:m.text=="🛒 المتجر")
@@ -151,14 +149,40 @@ def shop(m):
     for pid,p in data["products"].items():
         if p.get("vip") and not get_user(m.from_user.id)["vip"]:
             continue
-        if p.get("end") and time.time()>p["end"]:
-            continue
         kb.add(types.InlineKeyboardButton(
             f"{p['name']} - {p['price']}💰",
             callback_data=f"buy_{pid}"
         ))
-    bot.send_message(m.chat.id,"🛒 المنتجات:",reply_markup=kb)
+    bot.send_message(m.chat.id,"🛒 اختر منتج:",reply_markup=kb)
 
+# ================== PUBG ==================
+@bot.message_handler(func=lambda m:m.text=="🎮 شحن PUBG")
+def pubg(m):
+    kb=types.InlineKeyboardMarkup()
+    for pid,p in data["products"].items():
+        if p.get("cat")=="pubg":
+            kb.add(types.InlineKeyboardButton(
+                f"{p['name']} - {p['price']}💰",
+                callback_data=f"buy_{pid}"
+            ))
+    bot.send_message(m.chat.id,"🎮 شحن PUBG:",reply_markup=kb)
+
+# ================== ملفات VIP ==================
+@bot.message_handler(func=lambda m:m.text=="🔥 ملفات VIP")
+def vip_files(m):
+    if not get_user(m.from_user.id)["vip"]:
+        bot.send_message(m.chat.id,"🔒 القسم خاص بـ VIP")
+        return
+    kb=types.InlineKeyboardMarkup()
+    for pid,p in data["products"].items():
+        if p.get("vip"):
+            kb.add(types.InlineKeyboardButton(
+                f"{p['name']} - {p['price']}💰",
+                callback_data=f"buy_{pid}"
+            ))
+    bot.send_message(m.chat.id,"🔥 ملفات VIP:",reply_markup=kb)
+
+# ================== شراء ==================
 @bot.callback_query_handler(func=lambda c:c.data.startswith("buy_"))
 def buy(c):
     pid=c.data.split("_")[1]
@@ -166,14 +190,14 @@ def buy(c):
     p=data["products"].get(pid)
     if not p: return
     if u["points"]<p["price"]:
-        bot.answer_callback_query(c.id,"❌ رصيدك قليل",show_alert=True)
+        bot.answer_callback_query(c.id,"❌ رصيدك غير كافي",show_alert=True)
         return
     u["points"]-=p["price"]
     data["stats"]["sales"]+=1
     save()
     log(c.from_user.id,f"شراء {p['name']}")
     bot.send_document(c.message.chat.id,open(p["file"],"rb"))
-    bot.send_message(c.message.chat.id,"🔔 تم الشراء")
+    bot.send_message(c.message.chat.id,"🔔 تم التسليم")
 
 # ================== الأدمن ==================
 state={}
@@ -184,13 +208,12 @@ def adm(c):
     if c.data=="charge":
         bot.send_message(c.message.chat.id,"ID\nنقاط")
     if c.data=="product":
-        bot.send_message(c.message.chat.id,"اسم|سعر|ملف|vip(0/1)|ثواني")
+        bot.send_message(c.message.chat.id,"اسم|سعر|ملف|vip(0/1)|cat(pubg/vip/normal)")
     if c.data=="broadcast":
         bot.send_message(c.message.chat.id,"📩 الرسالة")
     if c.data=="stats":
         s=data["stats"]
-        bot.send_message(c.message.chat.id,
-            f"👥 {s['users']}\n💰 مبيعات {s['sales']}")
+        bot.send_message(c.message.chat.id,f"👥 {s['users']}\n💰 {s['sales']} عملية")
 
 @bot.message_handler(func=lambda m:m.from_user.id==ADMIN_ID)
 def adm_in(m):
@@ -203,20 +226,19 @@ def adm_in(m):
         get_user(uid)["points"]+=int(pts)
         save()
         bot.send_message(uid,"🔔 تم شحن نقاط")
-        bot.send_message(m.chat.id,"✅")
 
     if s=="product":
-        name,price,file,vip,sec=t.split("|")
+        name,price,file,vip,cat=t.split("|")
         pid=str(len(data["products"])+1)
         data["products"][pid]={
             "name":name,
             "price":int(price),
             "file":f"{FILES_DIR}/{file}",
             "vip":vip=="1",
-            "end":time.time()+int(sec) if sec!="0" else None
+            "cat":cat
         }
         save()
-        bot.send_message(m.chat.id,"📦 تم")
+        bot.send_message(m.chat.id,"📦 تم إضافة المنتج")
 
     if s=="broadcast":
         for uid in data["users"]:

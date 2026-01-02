@@ -1,1 +1,11 @@
-{}
+{
+  "users": {},
+  "products": {},
+  "vip": [],
+  "coupons": {},
+  "logs": [],
+  "stats": {
+    "users": 0,
+    "sales": 0
+  }
+}

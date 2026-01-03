@@ -3,7 +3,7 @@ from telebot import types
 import json, os, time
 
 # ================== الإعدادات ==================
-TOKEN = "ضع_التوكن_هنا"
+TOKEN = "5644960695:AAGx5jysi7ZYFFQw14LNIlcS2bpRCXWAg6g"
 ADMIN_ID = 5083996619
 FORCE_CHANNEL = "@Muslim_vip1"
 

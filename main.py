@@ -43,7 +43,8 @@ def get_user(uid):
         data["users"][uid]={
             "points":0,
             "vip":False,
-            "ref":False
+            "ref":False,
+            "last_collect":0
         }
         data["stats"]["users"]+=1
         save()
@@ -60,9 +61,9 @@ def log(uid,action):
 # ================== القوائم ==================
 def main_menu():
     kb=types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row("💰 رصيدي","🛒 المتجر")
-    kb.row("🎮 شحن PUBG","🔥 ملفات VIP")
-    kb.row("🎯 CPA","👥 دعوة")
+    kb.row("🎁 جمع نقاط","💰 رصيدي")
+    kb.row("🛒 المتجر","🎮 شحن PUBG")
+    kb.row("🔥 ملفات VIP","👥 دعوة")
     kb.row("⭐ VIP","🧾 سجلّي")
     return kb
 
@@ -82,7 +83,7 @@ def start(m):
         kb=types.InlineKeyboardMarkup()
         kb.add(types.InlineKeyboardButton("📢 اشترك",url=f"https://t.me/{FORCE_CHANNEL[1:]}"))
         kb.add(types.InlineKeyboardButton("✅ تحقق",callback_data="check"))
-        bot.send_message(m.chat.id,"🚫 اشترك أولاً",reply_markup=kb)
+        bot.send_message(m.chat.id,"🚫 اشترك في القناة أولاً",reply_markup=kb)
         return
 
     u=get_user(uid)
@@ -92,13 +93,42 @@ def start(m):
         if ref.isdigit() and ref!=str(uid) and not u["ref"]:
             get_user(ref)["points"]+=10
             u["ref"]=True
+            log(ref,"دعوة مستخدم +10")
             save()
-            bot.send_message(ref,"🎉 كسبت 10 نقاط دعوة")
 
-    bot.send_message(m.chat.id,"👋 أهلاً بيك في البوت",reply_markup=main_menu())
+    bot.send_message(
+        m.chat.id,
+        f"""👋 أهلاً بيك  
+💰 رصيدك: {u['points']} نقطة
+
+🎁 اجمع نقاط واشتري:
+• ملفات هيدشوت VIP
+• شحن PUBG UC
+• مميزات خاصة
+
+⚠️ كل الشراء بالنقاط فقط""",
+        reply_markup=main_menu()
+    )
 
     if uid==ADMIN_ID:
         bot.send_message(m.chat.id,"👑 لوحة الأدمن",reply_markup=admin_menu())
+
+# ================== جمع نقاط ==================
+@bot.message_handler(func=lambda m:m.text=="🎁 جمع نقاط")
+def collect(m):
+    u=get_user(m.from_user.id)
+    now=int(time.time())
+    if now - u["last_collect"] < 86400:
+        left = 86400 - (now - u["last_collect"])
+        h = left//3600
+        bot.send_message(m.chat.id,f"⏳ حاول بعد {h} ساعة")
+        return
+
+    u["points"]+=5
+    u["last_collect"]=now
+    log(m.from_user.id,"جمع نقاط يومي +5")
+    save()
+    bot.send_message(m.chat.id,"🎉 كسبت 5 نقاط")
 
 # ================== رصيد ==================
 @bot.message_handler(func=lambda m:m.text=="💰 رصيدي")
@@ -124,7 +154,7 @@ def mylog(m):
 def invite(m):
     bot.send_message(
         m.chat.id,
-        f"🔗 رابطك:\nhttps://t.me/{bot.get_me().username}?start={m.from_user.id}\n+10 نقاط"
+        f"🔗 رابطك:\nhttps://t.me/{bot.get_me().username}?start={m.from_user.id}\n🎁 +10 نقاط"
     )
 
 # ================== VIP ==================
@@ -136,8 +166,8 @@ def vip(m):
     elif u["points"]>=100:
         u["points"]-=100
         u["vip"]=True
-        save()
         log(m.from_user.id,"تفعيل VIP")
+        save()
         bot.send_message(m.chat.id,"🎉 تم تفعيل VIP")
     else:
         bot.send_message(m.chat.id,"❌ تحتاج 100 نقطة")
@@ -146,6 +176,7 @@ def vip(m):
 @bot.message_handler(func=lambda m:m.text=="🛒 المتجر")
 def shop(m):
     kb=types.InlineKeyboardMarkup()
+    count=0
     for pid,p in data["products"].items():
         if p.get("vip") and not get_user(m.from_user.id)["vip"]:
             continue
@@ -153,18 +184,31 @@ def shop(m):
             f"{p['name']} - {p['price']}💰",
             callback_data=f"buy_{pid}"
         ))
+        count+=1
+
+    if count==0:
+        bot.send_message(m.chat.id,"📦 لا توجد منتجات حالياً\n🎁 اجمع نقاط وانتظر الجديد")
+        return
+
     bot.send_message(m.chat.id,"🛒 اختر منتج:",reply_markup=kb)
 
 # ================== PUBG ==================
 @bot.message_handler(func=lambda m:m.text=="🎮 شحن PUBG")
 def pubg(m):
     kb=types.InlineKeyboardMarkup()
+    count=0
     for pid,p in data["products"].items():
         if p.get("cat")=="pubg":
             kb.add(types.InlineKeyboardButton(
                 f"{p['name']} - {p['price']}💰",
                 callback_data=f"buy_{pid}"
             ))
+            count+=1
+
+    if count==0:
+        bot.send_message(m.chat.id,"🎮 لا يوجد شحن حالياً")
+        return
+
     bot.send_message(m.chat.id,"🎮 شحن PUBG:",reply_markup=kb)
 
 # ================== ملفات VIP ==================
@@ -174,12 +218,19 @@ def vip_files(m):
         bot.send_message(m.chat.id,"🔒 القسم خاص بـ VIP")
         return
     kb=types.InlineKeyboardMarkup()
+    count=0
     for pid,p in data["products"].items():
         if p.get("vip"):
             kb.add(types.InlineKeyboardButton(
                 f"{p['name']} - {p['price']}💰",
                 callback_data=f"buy_{pid}"
             ))
+            count+=1
+
+    if count==0:
+        bot.send_message(m.chat.id,"🔥 لا توجد ملفات حالياً")
+        return
+
     bot.send_message(m.chat.id,"🔥 ملفات VIP:",reply_markup=kb)
 
 # ================== شراء ==================
@@ -194,10 +245,10 @@ def buy(c):
         return
     u["points"]-=p["price"]
     data["stats"]["sales"]+=1
-    save()
     log(c.from_user.id,f"شراء {p['name']}")
+    save()
     bot.send_document(c.message.chat.id,open(p["file"],"rb"))
-    bot.send_message(c.message.chat.id,"🔔 تم التسليم")
+    bot.send_message(c.message.chat.id,"✅ تم التسليم")
 
 # ================== الأدمن ==================
 state={}
